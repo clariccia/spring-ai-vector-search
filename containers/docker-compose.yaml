@@ -1,0 +1,47 @@
+services:
+  ollama-nomic-embed:
+    image: ollama/ollama-nomic-embed
+    ports:
+      - "11434:11434"
+    healthcheck:
+      test: "ollama --version && ollama ps || exit 1"
+      interval: 5s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  mongodb:
+    image: mongodb/mongodb-atlas-local
+    environment:
+      - MONGODB_INITDB_ROOT_USERNAME=user
+      - MONGODB_INITDB_ROOT_PASSWORD=pass
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_config:/data/configdb
+      - mongodb_data:/data/db
+
+  vector-search-service:
+    image: application/vector-search-java-app
+    depends_on:
+      ollama-nomic-embed:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    environment:
+      - DB_NAME=dev
+      - MONGO_ATLAS_CONNECTION_STRING=mongodb://user:pass@mongodb/dev?authSource=admin
+      - OLLAMA_BASE_URL=http://ollama-nomic-embed:11434
+      - JDK_JAVA_OPTIONS=--add-opens=java.base/java.nio.charset=ALL-UNNAMED
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: "curl --fail --silent 'http://localhost:8080/actuator/health' | grep UP || exit 1"
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  mongodb_config:
+  mongodb_data:
